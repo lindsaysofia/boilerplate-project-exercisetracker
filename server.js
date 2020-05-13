@@ -1,11 +1,12 @@
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
+require('dotenv').config();
 
 const cors = require('cors')
 
 const mongoose = require('mongoose')
-mongoose.connect(process.env.MLAB_URI || 'mongodb://localhost/exercise-track' )
+mongoose.connect(process.env.MLAB_URI || 'mongodb://localhost/exercise-track', {useNewUrlParser: true, useUnifiedTopology: true})
 
 app.use(cors())
 
@@ -42,6 +43,32 @@ app.use((err, req, res, next) => {
   res.status(errCode).type('txt')
     .send(errMessage)
 })
+
+let db = mongoose.connection;
+
+// See https://medium.com/@vsvaibhav2016/best-practice-of-mongoose-connection-with-mongodb-c470608483f0
+// successfully connected
+db.on('connected', () => {
+  console.log('Mongoose default connection is open.');
+});
+
+// on error
+db.on('error', err => {
+  console.log('Mongoose default connection has occured ' + err + ' error');
+});
+
+// disconnected
+db.on('disconnected', () => {
+  console.log('Mongoose default connection is dicsonnected');
+});
+
+// process end
+process.on('SIGINT', () => {
+  mongoose.connection.close(() => {
+    console.log("Mongoose default connection is disconnected due to application termination");
+    process.exit(0);
+  });
+});
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
