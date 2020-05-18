@@ -1,48 +1,27 @@
-const express = require('express')
-const app = express()
-const bodyParser = require('body-parser')
+'use strict';
+
+var express = require('express');
+var mongodb = require('mongodb');
+var mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const shortid = require('shortid');
 require('dotenv').config();
 
-const cors = require('cors')
+var cors = require('cors');
 
-const mongoose = require('mongoose')
-mongoose.connect(process.env.MLAB_URI || 'mongodb://localhost/exercise-track', {useNewUrlParser: true, useUnifiedTopology: true})
+var app = express();
 
-app.use(cors())
+app.use(cors());
 
-app.use(bodyParser.urlencoded({extended: false}))
-app.use(bodyParser.json())
+/** this project needs to parse POST bodies **/
+// you should mount the body-parser here
+app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.json());
 
+app.use('/public', express.static(process.cwd() + '/public'));
 
-app.use(express.static('public'))
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/views/index.html')
-});
-
-
-// Not found middleware
-app.use((req, res, next) => {
-  return next({status: 404, message: 'not found'})
-})
-
-// Error Handling middleware
-app.use((err, req, res, next) => {
-  let errCode, errMessage
-
-  if (err.errors) {
-    // mongoose validation error
-    errCode = 400 // bad request
-    const keys = Object.keys(err.errors)
-    // report the first validation error
-    errMessage = err.errors[keys[0]].message
-  } else {
-    // generic or custom error
-    errCode = err.status || 500
-    errMessage = err.message || 'Internal Server Error'
-  }
-  res.status(errCode).type('txt')
-    .send(errMessage)
-})
+/** this project needs a db !! **/ 
+mongoose.connect(process.env.MLAB_URI, {useNewUrlParser: true, useUnifiedTopology: true});
 
 let db = mongoose.connection;
 
@@ -70,6 +49,61 @@ process.on('SIGINT', () => {
   });
 });
 
-const listener = app.listen(process.env.PORT || 3000, () => {
-  console.log('Your app is listening on port ' + listener.address().port)
-})
+app.get('/', function(req, res){
+  res.sendFile(process.cwd() + '/views/index.html');
+});
+
+// your first API endpoint... 
+app.get("/api/hello", function (req, res) {
+  res.json({greeting: 'hello API'});
+});
+
+
+app.listen(3000, function () {
+  console.log('listening on 3000');
+});
+
+let exerciseSchema = new mongoose.Schema({
+  description: String,
+  duration: Number,
+  date: Date
+});
+
+let userSchema = new mongoose.Schema({
+  username: String,
+  _id: String,
+  count: Number,
+  log: [exerciseSchema]
+});
+
+const User = mongoose.model('User', userSchema);
+
+app.post('/api/exercise/new-user', (req, res) => {
+  let username = req.body.username;
+  let _id = shortid.generate();
+  let user = new User({username, _id, count: 0, log: []});
+  user.save(err => {
+    if (err) return console.log(err);
+    res.send({username, _id});
+  });
+});
+
+app.post('/api/exercise/add', (req, res) => {
+  let userId = req.body.userId;
+  let description = req.body.description;
+  let duration = req.body.duration;
+  let date = req.body.date;
+  db.collection('users').findOneAndUpdate({userId}, {$inc: {count: 1}, "$push": {log: {description, duration, date}}}, {new: true}, (err, data) => {
+    if (err) return console.log(err);
+    res.send({username: data.username, userId, description, duration, date});
+  });
+});
+
+app.get('/api/exercise/users', (req, res) => {
+  db.collection('users').find({}, (err, data) => {
+    if (err) return console.log(err);
+    res.send(JSON.stringify(data));
+  });
+});
+
+
