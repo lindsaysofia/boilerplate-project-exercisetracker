@@ -63,17 +63,11 @@ app.listen(3000, function () {
   console.log('listening on 3000');
 });
 
-let exerciseSchema = new mongoose.Schema({
-  description: String,
-  duration: Number,
-  date: Date
-});
-
 let userSchema = new mongoose.Schema({
   username: String,
   _id: String,
   count: Number,
-  log: [exerciseSchema]
+  log: []
 });
 
 const User = mongoose.model('User', userSchema);
@@ -88,22 +82,45 @@ app.post('/api/exercise/new-user', (req, res) => {
   });
 });
 
+// formatDate function from https://stackoverflow.com/questions/23593052/format-javascript-date-as-yyyy-mm-dd
+function formatDate() {
+  var d = new Date(),
+      month = '' + (d.getMonth() + 1),
+      day = '' + d.getDate(),
+      year = d.getFullYear();
+
+  if (month.length < 2) 
+      month = '0' + month;
+  if (day.length < 2) 
+      day = '0' + day;
+
+  return [year, month, day].join('-');
+}
+
+
 app.post('/api/exercise/add', (req, res) => {
-  let userId = req.body.userId;
+  let _id = req.body.userId;
   let description = req.body.description;
   let duration = req.body.duration;
-  let date = req.body.date;
-  db.collection('users').findOneAndUpdate({userId}, {$inc: {count: 1}, "$push": {log: {description, duration, date}}}, {new: true}, (err, data) => {
+  let date = req.body.date || formatDate();
+  db.collection('users').findOneAndUpdate({_id}, {$inc: {count: 1}, "$push": {log: {description, duration, date}}}, {new: true}, (err, data) => {
     if (err) return console.log(err);
-    res.send({username: data.username, userId, description, duration, date});
+    res.send({username: data.username, _id, description, duration, date});
   });
 });
 
 app.get('/api/exercise/users', (req, res) => {
-  db.collection('users').find({}, (err, data) => {
+  db.collection('users').find({}).toArray((err, data) => {
     if (err) return console.log(err);
-    res.send(JSON.stringify(data));
+    res.send(data);
   });
 });
 
-
+app.get('/api/exercise/log?', (req, res) => {
+  let _id = req.query.userId;
+  let from = req.query.from;
+  let to = req.query.to;
+  db.collection('users').findOne({_id}, (err, data) => {
+    res.send(data);
+  });
+});
